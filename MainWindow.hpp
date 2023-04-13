@@ -21,7 +21,7 @@ private slots:
 
 private:
 	void initLayout();
-	void addScreenToGrid(const QPixmap& pixmap);
+	void addScreenToGrid(const QPixmap& pixmap, const int percent);
 	QByteArray pixmapToByteArray(const QPixmap& pixmap);
 	QPixmap byteArrayToPixmap(const QByteArray& byteArray);
 

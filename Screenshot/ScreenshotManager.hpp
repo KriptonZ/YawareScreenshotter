@@ -13,6 +13,8 @@ public:
 
 	QPixmap takeScreenShot(const QWindow* winHandle) const;
 
+	int comparePixelByPixel(const QPixmap& prev, const QPixmap& curr) const; // Result - similarity percent
+
 signals:
 
 };

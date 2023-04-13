@@ -10,6 +10,7 @@
 #include <QTableWidget>
 #include <QHeaderView>
 #include <QBuffer>
+#include <QPainter>
 
 MainWindow::MainWindow(QWidget *parent)
 	: QMainWindow(parent)
@@ -20,7 +21,7 @@ MainWindow::MainWindow(QWidget *parent)
 	mDBManager->connect();
 
 	auto firstScreen = mDBManager->getAllScreenshots().first();
-	addScreenToGrid(byteArrayToPixmap(firstScreen.rawData));
+	addScreenToGrid(byteArrayToPixmap(firstScreen.rawData), 100);
 }
 
 MainWindow::~MainWindow()
@@ -32,7 +33,11 @@ void MainWindow::onStartStopButtonClicked()
 	ScreenshotManager scr;
 	auto screenShot = scr.takeScreenShot(windowHandle());
 
-	addScreenToGrid(screenShot);
+	auto lastScreen = mDBManager->getAllScreenshots().last();
+
+	auto percent = scr.comparePixelByPixel(byteArrayToPixmap(lastScreen.rawData), screenShot);
+
+	addScreenToGrid(screenShot, percent);
 
 	mDBManager->addScreenshot(ScreenshotData(111, 100, pixmapToByteArray(screenShot)));
 
@@ -65,10 +70,38 @@ void MainWindow::initLayout()
 	connect(mStartStopButton, &QPushButton::clicked, this, &MainWindow::onStartStopButtonClicked);
 }
 
-void MainWindow::addScreenToGrid(const QPixmap &pixmap)
+void MainWindow::addScreenToGrid(const QPixmap &pixmap, const int percent)
 {
 	auto screenLabel = new QLabel(this);
-	screenLabel->setPixmap(pixmap.scaled(120, 90, Qt::KeepAspectRatio));
+	auto scaledPixmap = pixmap.scaled(120, 90, Qt::KeepAspectRatio);
+	QPainter painter(&scaledPixmap);
+
+	painter.setBrush(Qt::white);
+	QPen pen;
+	pen.setColor(Qt::black);
+	painter.setPen(pen);
+	int w = scaledPixmap.width();
+	int h = scaledPixmap.height();
+	painter.drawEllipse(w - 31, h - 31, 30, 30);
+
+	painter.save();
+	painter.setPen(QPen(Qt::black, 5));
+	auto f = painter.font();
+	f.setPointSize(6);
+	f.setBold(true);
+	f.setStyleStrategy(QFont::PreferAntialias);
+	painter.setFont(f);
+
+	QString text = QString::number(percent) + "%";
+	auto textSize = painter.fontMetrics().size(0, text);
+
+	int x = w - 30 + (30 - textSize.width()) / 2;
+	int y = h - 30 + (30 - textSize.height()) / 2;
+	painter.drawText(QRect(x,y,30,30), text);
+
+	painter.restore();
+
+	screenLabel->setPixmap(scaledPixmap);
 
 	mScreensGrid->addWidget(screenLabel, 0, 0);
 }
