@@ -4,12 +4,12 @@
 
 struct ScreenshotData
 {
-	int hash = 0;
+	qint64 hash = 0;
 	int similarity = 100;
 	QByteArray rawData;
 
 	ScreenshotData() = default;
-	ScreenshotData(int hash, int similarity, QByteArray rawData) :
+	ScreenshotData(qint64 hash, int similarity, QByteArray rawData) :
 		hash(hash), similarity(similarity), rawData(rawData)
 	{}
 };

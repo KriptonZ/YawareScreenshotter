@@ -11,6 +11,7 @@
 #include <QHeaderView>
 #include <QBuffer>
 #include <QPainter>
+#include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent)
 	: QMainWindow(parent)
@@ -20,8 +21,15 @@ MainWindow::MainWindow(QWidget *parent)
 	mDBManager = new DBManager(this);
 	mDBManager->connect();
 
-	auto firstScreen = mDBManager->getAllScreenshots().first();
-	addScreenToGrid(byteArrayToPixmap(firstScreen.rawData), 100);
+	auto allScreens = mDBManager->getAllScreenshots();
+	for(int i = allScreens.count() - 1; i >= 0; i--)
+	{
+		addScreenToGrid(byteArrayToPixmap(allScreens[i].rawData), allScreens[i].similarity, false);
+	}
+	if(!allScreens.isEmpty())
+	{
+		mLastScreen = byteArrayToPixmap(allScreens.last().rawData);
+	}
 }
 
 MainWindow::~MainWindow()
@@ -33,13 +41,15 @@ void MainWindow::onStartStopButtonClicked()
 	ScreenshotManager scr;
 	auto screenShot = scr.takeScreenShot(windowHandle());
 
-	auto lastScreen = mDBManager->getAllScreenshots().last();
-
-	auto percent = scr.comparePixelByPixel(byteArrayToPixmap(lastScreen.rawData), screenShot);
+	int percent = 100;
+	if(!mLastScreen.isNull())
+	{
+		percent = scr.comparePixelByPixel(mLastScreen, screenShot);
+	}
+	mLastScreen = screenShot;
 
 	addScreenToGrid(screenShot, percent);
-
-	mDBManager->addScreenshot(ScreenshotData(111, 100, pixmapToByteArray(screenShot)));
+	mDBManager->addScreenshot(ScreenshotData(screenShot.cacheKey(), percent, pixmapToByteArray(screenShot)));
 
 	mStartStopButton->setText(mStartStopButton->text() == "Start" ? "Stop" : "Start");
 }
@@ -53,6 +63,7 @@ void MainWindow::initLayout()
 	auto hlayout = new QHBoxLayout();
 	hlayout->addWidget(mStartStopButton);
 	hlayout->addWidget(mSecondsLeftLabel);
+	hlayout->addStretch();
 
 	mScreensGrid = new QGridLayout();
 	auto vlayout = new QVBoxLayout();
@@ -70,7 +81,7 @@ void MainWindow::initLayout()
 	connect(mStartStopButton, &QPushButton::clicked, this, &MainWindow::onStartStopButtonClicked);
 }
 
-void MainWindow::addScreenToGrid(const QPixmap &pixmap, const int percent)
+void MainWindow::addScreenToGrid(const QPixmap &pixmap, const int percent, bool pushFront)
 {
 	auto screenLabel = new QLabel(this);
 	auto scaledPixmap = pixmap.scaled(120, 90, Qt::KeepAspectRatio);
@@ -98,12 +109,40 @@ void MainWindow::addScreenToGrid(const QPixmap &pixmap, const int percent)
 	int x = w - 30 + (30 - textSize.width()) / 2;
 	int y = h - 30 + (30 - textSize.height()) / 2;
 	painter.drawText(QRect(x,y,30,30), text);
-
 	painter.restore();
 
 	screenLabel->setPixmap(scaledPixmap);
 
-	mScreensGrid->addWidget(screenLabel, 0, 0);
+	if(pushFront)
+	{
+		pushFrontWidgetToGridLayout(screenLabel);
+	}
+	else
+	{
+		pushBackWidgetToGridLayout(screenLabel);
+	}
+}
+
+void MainWindow::pushBackWidgetToGridLayout(QWidget *widget)
+{
+	int r = mScreensGrid->count() / ElementsPerRow;
+	int c = mScreensGrid->count() % ElementsPerRow;
+	mScreensGrid->addWidget(widget, r, c);
+}
+
+void MainWindow::pushFrontWidgetToGridLayout(QWidget *widget)
+{
+	for(int i = mScreensGrid->count() - 1; i >= 0; i--)
+	{
+		int r = i / ElementsPerRow;
+		int c = i % ElementsPerRow;
+		auto currItem = mScreensGrid->itemAtPosition(r, c);
+		r = (i+1) / ElementsPerRow;
+		c = (i+1) % ElementsPerRow;
+		mScreensGrid->addWidget(currItem->widget(), r, c);
+	}
+
+	mScreensGrid->addWidget(widget, 0, 0);
 }
 
 QByteArray MainWindow::pixmapToByteArray(const QPixmap &pixmap)
