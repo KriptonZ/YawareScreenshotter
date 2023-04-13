@@ -2,9 +2,11 @@
 
 #include <QMainWindow>
 
+class DBManager;
 class QPushButton;
 class QLabel;
 class QGridLayout;
+class QPixmap;
 
 class MainWindow : public QMainWindow
 {
@@ -19,8 +21,13 @@ private slots:
 
 private:
 	void initLayout();
+	void addScreenToGrid(const QPixmap& pixmap);
+	QByteArray pixmapToByteArray(const QPixmap& pixmap);
+	QPixmap byteArrayToPixmap(const QByteArray& byteArray);
 
 	QPushButton* mStartStopButton = nullptr;
 	QLabel* mSecondsLeftLabel = nullptr;
 	QGridLayout* mScreensGrid = nullptr;
+
+	DBManager* mDBManager = nullptr;
 };

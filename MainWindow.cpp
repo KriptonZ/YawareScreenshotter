@@ -1,5 +1,7 @@
 #include "MainWindow.hpp"
+#include "Screenshot/ScreenshotData.hpp"
 #include "Screenshot/ScreenshotManager.hpp"
+#include "Database/DBManager.hpp"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -7,11 +9,18 @@
 #include <QLabel>
 #include <QTableWidget>
 #include <QHeaderView>
+#include <QBuffer>
 
 MainWindow::MainWindow(QWidget *parent)
 	: QMainWindow(parent)
 {
 	initLayout();
+
+	mDBManager = new DBManager(this);
+	mDBManager->connect();
+
+	auto firstScreen = mDBManager->getAllScreenshots().first();
+	addScreenToGrid(byteArrayToPixmap(firstScreen.rawData));
 }
 
 MainWindow::~MainWindow()
@@ -23,10 +32,9 @@ void MainWindow::onStartStopButtonClicked()
 	ScreenshotManager scr;
 	auto screenShot = scr.takeScreenShot(windowHandle());
 
-	auto screenLabel = new QLabel(this);
-	screenLabel->setPixmap(screenShot.scaled(160, 90, Qt::KeepAspectRatio));
+	addScreenToGrid(screenShot);
 
-	mScreensGrid->addWidget(screenLabel, 0, 0);
+	mDBManager->addScreenshot(ScreenshotData(111, 100, pixmapToByteArray(screenShot)));
 
 	mStartStopButton->setText(mStartStopButton->text() == "Start" ? "Stop" : "Start");
 }
@@ -45,6 +53,7 @@ void MainWindow::initLayout()
 	auto vlayout = new QVBoxLayout();
 	vlayout->addLayout(hlayout);
 	vlayout->addLayout(mScreensGrid);
+	vlayout->addStretch();
 
 	auto centralWidget = new QWidget(this);
 	centralWidget->setLayout(vlayout);
@@ -54,5 +63,29 @@ void MainWindow::initLayout()
 	setMinimumWidth(300);
 
 	connect(mStartStopButton, &QPushButton::clicked, this, &MainWindow::onStartStopButtonClicked);
+}
+
+void MainWindow::addScreenToGrid(const QPixmap &pixmap)
+{
+	auto screenLabel = new QLabel(this);
+	screenLabel->setPixmap(pixmap.scaled(120, 90, Qt::KeepAspectRatio));
+
+	mScreensGrid->addWidget(screenLabel, 0, 0);
+}
+
+QByteArray MainWindow::pixmapToByteArray(const QPixmap &pixmap)
+{
+	QByteArray array;
+	QBuffer buffer(&array);
+	buffer.open(QIODevice::WriteOnly);
+	pixmap.save(&buffer, "PNG");
+	return array;
+}
+
+QPixmap MainWindow::byteArrayToPixmap(const QByteArray &byteArray)
+{
+	QPixmap pixmap;
+	pixmap.loadFromData(byteArray, "PNG");
+	return pixmap;
 }
 
