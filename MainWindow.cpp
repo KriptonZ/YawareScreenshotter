@@ -9,9 +9,12 @@
 #include <QLabel>
 #include <QTableWidget>
 #include <QHeaderView>
+#include <QScrollArea>
 #include <QBuffer>
 #include <QPainter>
-#include <QDebug>
+#include <QTimer>
+#include <QThread>
+
 
 MainWindow::MainWindow(QWidget *parent)
 	: QMainWindow(parent)
@@ -26,39 +29,83 @@ MainWindow::MainWindow(QWidget *parent)
 	{
 		addScreenToGrid(byteArrayToPixmap(allScreens[i].rawData), allScreens[i].similarity, false);
 	}
+
 	if(!allScreens.isEmpty())
 	{
 		mLastScreen = byteArrayToPixmap(allScreens.last().rawData);
 	}
+
+	mTimer = new QTimer(this);
+	mTimer->setInterval(1000);
+	connect(mTimer, &QTimer::timeout, this, &MainWindow::onTimerTimeout);
 }
 
 MainWindow::~MainWindow()
 {
+	if(mScreenshotManagerThread != nullptr)
+	{
+		mScreenshotManagerThread->quit();
+		mScreenshotManagerThread->wait();
+	}
 }
 
 void MainWindow::onStartStopButtonClicked()
 {
-	ScreenshotManager scr;
-	auto screenShot = scr.takeScreenShot(windowHandle());
-
-	int percent = 100;
-	if(!mLastScreen.isNull())
+	if(!mTimer->isActive())
 	{
-		percent = scr.comparePixelByPixel(mLastScreen, screenShot);
+		mTimer->start();
+		mStartStopButton->setText("Stop");
 	}
-	mLastScreen = screenShot;
+	else
+	{
+		mTimer->stop();
+		mStartStopButton->setText("Start");
+	}
+}
 
-	addScreenToGrid(screenShot, percent);
-	mDBManager->addScreenshot(ScreenshotData(screenShot.cacheKey(), percent, pixmapToByteArray(screenShot)));
+void MainWindow::onTimerTimeout()
+{
+	--mSecondsLeft;
+	if(mSecondsLeft == 0)
+	{
+		mSecondsLeft = Interval;
 
-	mStartStopButton->setText(mStartStopButton->text() == "Start" ? "Stop" : "Start");
+		mScreenshotManagerThread = new QThread(this);
+		mScreenshotManager = new ScreenshotManager();
+		mScreenshotManager->moveToThread(mScreenshotManagerThread);
+
+		connect(mScreenshotManagerThread, &QThread::started, this, [this](){
+			auto screenShot = mScreenshotManager->takeScreenShot(windowHandle());
+
+			int percent = 100;
+			if(!mLastScreen.isNull())
+			{
+				percent = mScreenshotManager->comparePixelByPixel(mLastScreen, screenShot);
+			}
+			mLastScreen = screenShot;
+
+			addScreenToGrid(screenShot, percent);
+			mDBManager->addScreenshot(ScreenshotData(screenShot.cacheKey(), percent, pixmapToByteArray(screenShot)));
+
+			emit screeshotAdded();;
+		});
+		connect(this, &MainWindow::screeshotAdded, mScreenshotManagerThread, &QThread::quit);
+		connect(mScreenshotManagerThread, &QThread::finished, mScreenshotManager, &ScreenshotManager::deleteLater);
+
+		mScreenshotManagerThread->start();
+	}
+
+	mSecondsLeftLabel->setText(QString("%1:%2").arg(mSecondsLeft / 60, 2 , 10, QLatin1Char('0'))
+							   .arg(mSecondsLeft % 60, 2 , 10, QLatin1Char('0')));
 }
 
 void MainWindow::initLayout()
 {
 	mStartStopButton = new QPushButton("Start", this);
 
-	mSecondsLeftLabel = new QLabel("01:00", this);
+	mSecondsLeftLabel = new QLabel(this);
+	mSecondsLeftLabel->setText(QString("%1:%2").arg(mSecondsLeft / 60, 2 , 10, QLatin1Char('0'))
+							   .arg(mSecondsLeft % 60, 2 , 10, QLatin1Char('0')));
 
 	auto hlayout = new QHBoxLayout();
 	hlayout->addWidget(mStartStopButton);
@@ -66,17 +113,22 @@ void MainWindow::initLayout()
 	hlayout->addStretch();
 
 	mScreensGrid = new QGridLayout();
+	auto previewsWidget = new QWidget(this);
+	previewsWidget->setLayout(mScreensGrid);
+	auto scrollArea = new QScrollArea(this);
+	scrollArea->setWidgetResizable(true);
+	scrollArea->setWidget(previewsWidget);
+
 	auto vlayout = new QVBoxLayout();
 	vlayout->addLayout(hlayout);
-	vlayout->addLayout(mScreensGrid);
-	vlayout->addStretch();
+	vlayout->addWidget(scrollArea);
 
 	auto centralWidget = new QWidget(this);
 	centralWidget->setLayout(vlayout);
 
 	setCentralWidget(centralWidget);
-	setMinimumHeight(300);
-	setMinimumWidth(300);
+	setMinimumWidth(680);
+	setMinimumHeight(360);
 
 	connect(mStartStopButton, &QPushButton::clicked, this, &MainWindow::onStartStopButtonClicked);
 }
@@ -91,9 +143,10 @@ void MainWindow::addScreenToGrid(const QPixmap &pixmap, const int percent, bool 
 	QPen pen;
 	pen.setColor(Qt::black);
 	painter.setPen(pen);
-	int w = scaledPixmap.width();
-	int h = scaledPixmap.height();
-	painter.drawEllipse(w - 31, h - 31, 30, 30);
+	const int w = scaledPixmap.width();
+	const int h = scaledPixmap.height();
+	const int r = 30;
+	painter.drawEllipse(w - (r+1), h - (r+1), r, r);
 
 	painter.save();
 	painter.setPen(QPen(Qt::black, 5));
@@ -106,9 +159,9 @@ void MainWindow::addScreenToGrid(const QPixmap &pixmap, const int percent, bool 
 	QString text = QString::number(percent) + "%";
 	auto textSize = painter.fontMetrics().size(0, text);
 
-	int x = w - 30 + (30 - textSize.width()) / 2;
-	int y = h - 30 + (30 - textSize.height()) / 2;
-	painter.drawText(QRect(x,y,30,30), text);
+	int x = w - r + (r - textSize.width()) / 2;
+	int y = h - r + (r - textSize.height()) / 2;
+	painter.drawText(QRect(x,y,r,r), text);
 	painter.restore();
 
 	screenLabel->setPixmap(scaledPixmap);

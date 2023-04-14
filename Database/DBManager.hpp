@@ -3,6 +3,7 @@
 #include "Screenshot/ScreenshotData.hpp"
 #include <QObject>
 #include <QSqlDatabase>
+#include <QMutex>
 
 class DBManager : public QObject
 {
@@ -19,5 +20,6 @@ signals:
 
 private:
 	QSqlDatabase mDb;
+	QMutex* mMutex = nullptr;
 };
 

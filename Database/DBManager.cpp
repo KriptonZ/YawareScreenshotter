@@ -5,7 +5,7 @@
 #include <QDebug>
 
 DBManager::DBManager(QObject *parent)
-	: QObject(parent)
+	: QObject(parent), mMutex(new QMutex())
 {
 	mDb = QSqlDatabase::addDatabase("QSQLITE", "screens");
 	mDb.setConnectOptions("QSQLITE_ENABLE_REGEXP");
@@ -43,6 +43,8 @@ bool DBManager::connect()
 
 bool DBManager::addScreenshot(const ScreenshotData &data) const
 {
+	QMutexLocker locker(mMutex);
+
 	QSqlQuery query(mDb);
 	query.prepare("INSERT INTO screenshots_data(hash, similarity, data) "
 				  "VALUES(:hash, :similarity, :data)");
