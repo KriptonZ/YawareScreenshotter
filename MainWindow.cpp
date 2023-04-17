@@ -14,6 +14,7 @@
 #include <QPainter>
 #include <QTimer>
 #include <QThread>
+#include <QSpacerItem>
 
 
 MainWindow::MainWindow(QWidget *parent)
@@ -113,8 +114,14 @@ void MainWindow::initLayout()
 	hlayout->addStretch();
 
 	mScreensGrid = new QGridLayout();
+	auto proxyGrid = new QGridLayout();
+	proxyGrid->addLayout(mScreensGrid, 0, 0);
+	auto spacerRight = new QSpacerItem(1, 1, QSizePolicy::Expanding, QSizePolicy::Minimum);
+	auto spacerBottom = new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding);
+	proxyGrid->addItem(spacerRight, 0, 1);
+	proxyGrid->addItem(spacerBottom, 1, 0);
 	auto previewsWidget = new QWidget(this);
-	previewsWidget->setLayout(mScreensGrid);
+	previewsWidget->setLayout(proxyGrid);
 	auto scrollArea = new QScrollArea(this);
 	scrollArea->setWidgetResizable(true);
 	scrollArea->setWidget(previewsWidget);
